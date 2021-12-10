@@ -1,0 +1,516 @@
+---
+title: "Capstone"
+author: "Michael Taffe"
+date: "11/15/2021"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+# Reading Data
+```{r}
+cs.data = read.table('./Data4.tsv', sep = '\t', header = TRUE) 
+head(cs.data)
+
+library(tidyverse)
+```
+# interpreting variables
+```{r}
+summary(cs.data)
+```
+\ All x variables from summary look to be skewed. We will plot histograms to further analyse
+
+```{r}
+par(mfrow=c(1,3))
+hist(cs.data$Tempchange)
+hist(cs.data$Population)
+hist(cs.data$Area)
+hist(cs.data$Density)
+hist(cs.data$Coast)
+hist(cs.data$Latitude)
+hist(cs.data$Altitude)
+```
+\ Population, Area, Density, Coast, and altitude are all skewed right
+### Box-cox (To conduct this test we will need to take the abs of Temp change as Boxcox needs positive response variable)
+```{r}
+library(MASS)
+```
+```{r}
+cs.data$abstemp = abs(cs.data$Tempchange)
+```
+
+```{r}
+Popslr = lm(abstemp ~ Population, data=cs.data)
+Areaslr = lm(abstemp~ Area, data=cs.data)
+Densslr = lm(abstemp ~ Density, data=cs.data)
+Altslr = lm(abstemp ~ Altitude, data=cs.data)
+```
+
+```{r}
+boxcox(Popslr)
+```
+```{r}
+boxcox(Areaslr)
+```
+```{r}
+boxcox(Densslr)
+```
+```{r}
+boxcox(Altslr)
+```
+### Linearizing without boxcox 
+```{r}
+Linpop = log(cs.data$Population)
+Linarea = log(cs.data$Area)
+Lindense = log(cs.data$Density)
+Linalt = log(cs.data$Altitude)
+```
+```{r}
+par(mfrow=c(1,2))
+hist(Linpop)
+hist(Linarea)
+hist(Lindense)
+hist(Linalt)
+```
+\ These variables follow a much more normal distribution and will be used in building the models.
+### Testing for outliers
+forgot to do this oops
+
+# Geographic Model
+## Building Models
+```{r}
+Geomlr = lm(Tempchange ~ Latitude + Altitude + Coast, data = cs.data)
+```
+```{r}
+summary(Geomlr)
+```
+```{r}
+anova(Geomlr)
+```
+
+### Best Subset
+```{r}
+library(leaps)
+```
+```{r}
+temp = regsubsets(Tempchange ~ Latitude + Altitude + Coast, data=cs.data)
+bestsub = summary(temp)
+bestsub
+```
+## Plotting Model
+
+## Testing Assumptions 
+```{r}
+library(car)
+```
+```{r}
+avPlots(Geomlr)
+```
+```{r}
+vif(Geomlr)
+```
+```{r}
+influenceIndexPlot(Geomlr)
+```
+```{r}
+rstudent(Geomlr)
+```
+```{r}
+dffits(Geomlr)
+```
+```{r}
+dfbetas(Geomlr)
+```
+```{r}
+n <- 100 # sample size
+p <- 4 # 4 parameters (1 intercept, 3 slopes)
+par(mfrow=c(2,2))
+plot(rstudent(Geomlr), ylab="studentized deleted residual")
+abline(qt(1-0.1/(2*n), df=n - p - 1), 0, lty=2)
+abline(qt(0.1/(2*n), df=n - p - 1), 0, lty=2)
+plot(dffits(Geomlr), ylab = "dffits")
+abline(1, 0, lty=2)
+abline(1, 0, lty=2)
+plot(cooks.distance(Geomlr), ylab="Cook's Distance")
+abline(qf(0.5, df1=5, df2=n-p), 0, lty=2)
+plot(hatvalues(Geomlr), ylab="leverage")
+abline(2*p/n, 0, lty=2)
+```
+```{r}
+par(mfrow=c(2,3))
+for (i in 1:4) {
+plot(dfbetas(Geomlr)[, i], ylab=paste("Dfbeta_", i-1))
+abline(1, 0, lty=2)
+abline(-1, 0, lty=2)
+}
+```
+```{r}
+library(lmtest)
+```
+```{r}
+dwtest(Geomlr)
+```
+```{r}
+dwtest(Geomlr, alternative = "two.sided")
+```
+\ P value indicates that there is not 1st order auto correlation
+```{r}
+qqnorm(Geomlr$residuals)
+qqline(Geomlr$residuals)
+```
+
+# City Design Model
+## Building Models
+```{r}
+Lintrue = log(cs.data$TrueSize)
+```
+
+```{r}
+Desmlr = lm(Tempchange ~ Population + Density + Area + Lintrue, data = cs.data)
+```
+```{r}
+Desmlr
+```
+
+```{r}
+summary(Desmlr)
+```
+```{r}
+anova(Desmlr)
+```
+
+### Best Subset
+```{r}
+temp2 = regsubsets(Tempchange ~ Population + Area + Density + TrueSize, data=cs.data)
+bestsub2 = summary(temp2)
+bestsub2
+```
+## Plotting Model
+
+## Testing Assumption
+```{r}
+avPlots(Desmlr)
+```
+```{r}
+vif(Desmlr)
+```
+```{r}
+influenceIndexPlot(Desmlr)
+```
+```{r}
+rstudent(Desmlr)
+```
+```{r}
+dffits(Desmlr)
+```
+```{r}
+dfbetas(Desmlr)
+```
+```{r}
+n <- 100 # sample size
+p <- 5 # 4 parameters (1 intercept, 3 slopes)
+par(mfrow=c(2,2))
+plot(rstudent(Geomlr), ylab="studentized deleted residual")
+abline(qt(1-0.1/(2*n), df=n - p - 1), 0, lty=2)
+abline(qt(0.1/(2*n), df=n - p - 1), 0, lty=2)
+plot(dffits(Desmlr), ylab = "dffits")
+abline(1, 0, lty=2)
+abline(1, 0, lty=2)
+plot(cooks.distance(Desmlr), ylab="Cook's Distance")
+abline(qf(0.5, df1=5, df2=n-p), 0, lty=2)
+plot(hatvalues(Desmlr), ylab="leverage")
+abline(2*p/n, 0, lty=2)
+```
+\ Issues in the leverage
+```{r}
+par(mfrow=c(2,3))
+for (i in 1:4) {
+plot(dfbetas(Desmlr)[, i], ylab=paste("Dfbeta_", i-1))
+abline(1, 0, lty=2)
+abline(-1, 0, lty=2)
+}
+```
+```{r}
+dwtest(Desmlr)
+```
+```{r}
+dwtest(Geomlr, alternative = "two.sided")
+```
+```{r}
+qqnorm(Desmlr$residuals)
+qqline(Desmlr$residuals)
+```
+# Combined Model
+## Building Model
+```{r}
+cmmlr <- lm(Tempchange ~ Population + Area + Density + Coast + Latitude + Altitude + Lintrue, data = cs.data)
+cmmlr
+```
+```{r}
+summary(cmmlr)
+```
+```{r}
+anova(cmmlr)
+```
+```{r}
+avPlots(cmmlr)
+```
+```{r}
+vif(cmmlr)
+```
+```{r}
+influenceIndexPlot(cmmlr)
+```
+```{r}
+rstudent(cmmlr)
+```
+```{r}
+dffits(cmmlr)
+```
+```{r}
+dfbetas(cmmlr)
+```
+```{r}
+n <- 100 # sample size
+p <- 8 # 8 parameters (1 intercept, 7 slopes)
+par(mfrow=c(2,2))
+plot(rstudent(cmmlr), ylab="studentized deleted residual")
+abline(qt(1-0.1/(2*n), df=n - p - 1), 0, lty=2)
+abline(qt(0.1/(2*n), df=n - p - 1), 0, lty=2)
+plot(dffits(cmmlr), ylab = "dffits")
+abline(1, 0, lty=2)
+abline(1, 0, lty=2)
+plot(cooks.distance(cmmlr), ylab="Cook's Distance")
+abline(qf(0.5, df1=5, df2=n-p), 0, lty=2)
+plot(hatvalues(cmmlr), ylab="leverage")
+abline(2*p/n, 0, lty=2)
+```
+
+--------------------------------------------------------------------------------------------------
+
+# Linearized Models
+
+```{r}
+Popslr_lnrz <- lm(abstemp ~ log(Population), data = cs.data)
+Areaslr_lnrz <- lm(abstemp~ log(Area), data=cs.data)
+Densslr_lnrz <- lm(abstemp ~ log(Density), data=cs.data)
+
+cs.data$Altitude[84] <- 1
+cs.data$Altitude[88] <- 1
+
+Altslr_lnrz <- lm(abstemp ~ log(Altitude), data=cs.data)
+```
+
+```{r}
+Desmlr_lnrz <- lm(Tempchange ~ log(Population) + log(Area) + log(Density) + log(TrueSize), data = cs.data)
+
+summary(Desmlr_lnrz)
+anova(Desmlr_lnrz)
+```
+
+```{r}
+#temp2 = regsubsets(Tempchange ~ Population + Area + Density + Truesize, data=cs.data)
+#bestsub2 = summary(temp2)
+#bestsub2
+
+temp2_lnrz <- regsubsets(Tempchange ~ log(Population) + log(Area) + log(Density) + log(TrueSize), data=cs.data)
+bestsub2 <- summary(temp2_lnrz)
+bestsub2
+```
+
+```{r}
+summary(Desmlr)
+```
+```{r}
+anova(Desmlr)
+```
+
+### Best Subset
+```{r}
+temp2 = regsubsets(Tempchange ~ Population + Area + Density + TrueSize, data=cs.data)
+bestsub2 = summary(temp2)
+bestsub2
+```
+
+## Plotting Model
+
+## Testing Assumption
+```{r}
+avPlots(Desmlr_lnrz)
+```
+```{r}
+influenceIndexPlot(Desmlr_lnrz)
+```
+```{r}
+rstudent(Desmlr_lnrz)
+```
+```{r}
+dffits(Desmlr_lnrz)
+```
+```{r}
+dfbetas(Desmlr_lnrz)
+```
+
+```{r}
+n <- 100 # sample size
+p <- 5 # 4 parameters (1 intercept, 3 slopes)
+par(mfrow=c(2,2))
+plot(dffits(Desmlr_lnrz), ylab = "dffits")
+abline(1, 0, lty=2)
+abline(1, 0, lty=2)
+plot(cooks.distance(Desmlr_lnrz), ylab="Cook's Distance")
+abline(qf(0.5, df1=5, df2=n-p), 0, lty=2)
+plot(hatvalues(Desmlr_lnrz), ylab="leverage")
+abline(2*p/n, 0, lty=2)
+```
+\ Issues in the leverage
+```{r}
+par(mfrow=c(2,3))
+for (i in 1:3) {
+plot(dfbetas(Desmlr_lnrz)[, i], ylab=paste("Dfbeta_", i-1))
+abline(1, 0, lty=2)
+abline(-1, 0, lty=2)
+}
+```
+```{r}
+dwtest(Desmlr_lnrz)
+```
+```{r}
+qqnorm(Desmlr_lnrz$residuals)
+qqline(Desmlr_lnrz$residuals)
+```
+
+```{r}
+cmmlr_lnrz <- lm(Tempchange ~ log(Population) + log(Area) + log(Density) + Coast + Latitude + Altitude + Lintrue, data = cs.data)
+cmmlr
+```
+```{r}
+summary(cmmlr_lnrz)
+```
+```{r}
+anova(cmmlr_lnrz)
+```
+```{r}
+avPlots(cmmlr_lnrz)
+```
+```{r}
+influenceIndexPlot(cmmlr_lnrz)
+```
+```{r}
+rstudent(cmmlr_lnrz)
+```
+```{r}
+dffits(cmmlr_lnrz)
+```
+```{r}
+dfbetas(cmmlr_lnrz)
+```
+```{r}
+n <- 100 # sample size
+p <- 8 # 8 parameters (1 intercept, 7 slopes)
+par(mfrow=c(2,2))
+plot(rstudent(cmmlr_lnrz), ylab="studentized deleted residual")
+abline(qt(1-0.1/(2*n), df=n - p - 1), 0, lty=2)
+abline(qt(0.1/(2*n), df=n - p - 1), 0, lty=2)
+plot(dffits(cmmlr_lnrz), ylab = "dffits")
+abline(1, 0, lty=2)
+abline(1, 0, lty=2)
+plot(cooks.distance(cmmlr_lnrz), ylab="Cook's Distance")
+abline(qf(0.5, df1=5, df2=n-p), 0, lty=2)
+plot(hatvalues(cmmlr_lnrz), ylab="leverage")
+abline(2*p/n, 0, lty=2)
+```
+
+
+
+
+
+```{r}
+summary(Geomlr)
+```
+
+As R Square adjusted tells us that this model only explains 9.53% of the variables these number is too low,
+even though the p-value tells us that the overall model is statistically significant. Only the variable latitude and altitude has a significant t-value. It appears that coast isnt functioning as welll as the other variables.
+
+
+```{r}
+summary(Desmlr)
+```
+
+
+Althought Population and Lintrue are significant we will have to reject these model
+as P-value associated to F-statistic isnt significant enough. We failed to reject reject the null hypothesis
+that says that the overall model is not significant.
+
+
+```{r}
+summary(cmmlr)
+```
+
+These model appears to be the best,  we reject the null hypothesis associated
+to F-stat as P-value is lower than alpha. Second, Adjusted-R square is higher than in the other two models
+thus these model explaining 15.22% of temperature change. Third, we obtain a very significant variable
+wich is latitude, and others highly significant such as Population, altitude and Lintrue.
+
+
+
+
+
+
+```{r}
+summary(Desmlr_lnrz)
+```
+
+
+Althought Population and Lintrue are significant we will have to reject these model
+as P-value associated to F-statistic isnt significant enough. We failed to reject reject the null hypothesis
+that says that the overall model is not significant. 
+
+
+
+```{r}
+summary(cmmlr_lnrz)
+```
+
+
+These model appears to be the second best, we reject the null hypothesis associated
+to F-stat as P-value is lower than alpha 0.05. Second, Adjusted-R square is 0.117 meaning this model explains 11.70% of data.  Variable latitude was highly signficant and variables altitude and log(area) seems to help the model too.
+
+
+
+
+```{r}
+summary(csmlr3)
+```
+
+These model appears to be the third best, we reject the null hypothesis associated
+to F-stat as P-value is lower than alpha 0.05. Second, Adjusted-R square is lower than the two best models explaining only 9.53% of the variables. Third, we loss a lot of information as these model does not contemplate important variables such as population and Lintrue, and also the variable latitude looses significance.
+
+Calculating AIC of top 3 models (cmmlr,cs.mlr1, and csmlr3)
+
+```{r}
+library(tidyverse)
+library(broom)
+
+
+
+```
+
+
+```{r}
+library(tidyverse)
+library(broom)
+library(modelr)
+
+AIC(cmmlr)
+BIC(cmmlr)
+```
+```{r}
+AIC(cmmlr_lnrz)
+BIC(cmmlr_lnrz)
+```
+
+```{r}
+AIC(Geomlr)
+BIC(Geomlr)
+```
